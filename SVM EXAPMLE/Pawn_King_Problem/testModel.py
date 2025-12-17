@@ -50,6 +50,14 @@ print("预测概率值:", np.array(p_val))
 
 
 
+
+
+from sklearn.metrics import roc_curve, auc
+import matplotlib.pyplot as plt
+import mplcursors
+import plotly.graph_objects as go
+from sklearn.metrics import roc_curve, auc
+
 # 检查 p_val 是否为空且每行至少有两个元素
 # 非空检测、检测p_val中的每一行是否为列表或数组且长度大于1
 if p_val and all(isinstance(row, (list, np.ndarray)) and len(row) > 1 for row in p_val):
@@ -58,12 +66,6 @@ if p_val and all(isinstance(row, (list, np.ndarray)) and len(row) > 1 for row in
     prob_pos = np.array([row[pos_index] for row in p_val])# 找到正类的概率对于标签顺序[1, -1]，正类索引为0
 else:
     raise ValueError("p_val 为空或格式不正确，无法提取正类概率。")
-
-from sklearn.metrics import roc_curve, auc
-import matplotlib.pyplot as plt
-import mplcursors
-import plotly.graph_objects as go
-from sklearn.metrics import roc_curve, auc
 
 # 计算ROC曲线数据
 # 输入yTesting真实标签，prob_pos为预测为正类的概率，pos_label=1表示正类标签为1
