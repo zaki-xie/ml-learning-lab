@@ -183,13 +183,15 @@ for i, C in enumerate(newC):
             bestGammaIndex_fine = j
 print(f"[精细搜索] 最佳参数: C={bestC_fine} (index={bestCIndex_fine}), gamma={bestGamma_fine} (index={bestGammaIndex_fine}), 识别率={maxRecognitionRate_fine}%")
 
-# 使用精细搜索得到的最佳参数
-finalC = bestC_fine
-finalGamma = bestGamma_fine
 
 ########################################################################
 # 6、使用最佳参数在整个训练集上训练最终模型，并保存模型和测试数据
 # 设置最终训练参数（不使用 -v）
+
+# 使用精细搜索得到的最佳参数
+finalC = bestC_fine
+finalGamma = bestGamma_fine
+
 param = f'-t 2 -c {finalC} -g {finalGamma} -b 1'#-b 1 启用概率估计,不启用-v交叉验证
 
 # 在整个训练集上训练模型
