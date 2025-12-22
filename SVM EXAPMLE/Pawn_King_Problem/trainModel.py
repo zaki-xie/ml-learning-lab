@@ -35,11 +35,11 @@ for line in lines:
         # print(vec)
         # print(xapp)
 
-    # 标签：如果第7个字符是 'draw' → 正类(+1)，否则负类(-1)
-    if parts[6] == 'draw':
-        yapp.append(1)
-    else:
-        yapp.append(-1)
+        # 标签：如果第7个字符是 'draw' → 正类(+1)，否则负类(-1)
+        if parts[6] == 'draw':
+            yapp.append(1)
+        else:
+            yapp.append(-1)
 #print(xapp)
 
 # 确保是二维数组 (M,6)，每行一个样本
