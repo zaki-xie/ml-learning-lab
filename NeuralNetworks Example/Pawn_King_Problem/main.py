@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from sklearn.discriminant_analysis import StandardScaler
 from sklearn.model_selection import train_test_split
 
 def load_krk_dataset(
@@ -59,19 +60,29 @@ def load_krk_dataset(
     # -----------------------------
     # 3. 数据集划分
     # -----------------------------
-    # 第一次划分：训练集 40%，剩余 60%
+    # 举例：第一次划分：训练集 40%，剩余 60%
     xTrain, xRemain, yTrain, yRemain = train_test_split(
         xapp, yapp,
         test_size=1 - ratioTraining,
         random_state=0
     )
 
-    # 第二次划分：从剩余 60% 中划分验证集 10%，测试集 50%
+    # 举例：第二次划分：从剩余 60% 中划分验证集 10%，测试集 50%
     xVal, xTest, yVal, yTest = train_test_split(
         xRemain, yRemain,
         test_size=ratioTesting / (ratioTesting + ratioValidation),
         random_state=0
     )
+    # -----------------------------
+    # 4. 数据集归一化
+    # -----------------------------
+    scaler = StandardScaler(copy=False)
+    scaler.fit(xTrain)          # 计算训练集的均值和标准差
+    scaler.transform(xTrain)    # 标准化训练集
+    scaler.transform(xVal)      # 标准化验证集
+    scaler.transform(xTest)     # 标准化测试集
+    
+
 
     return xTrain, yTrain, xVal, yVal, xTest, yTest
 
