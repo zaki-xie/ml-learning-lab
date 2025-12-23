@@ -2,6 +2,7 @@ import os
 import numpy as np
 from sklearn.discriminant_analysis import StandardScaler
 from sklearn.model_selection import train_test_split
+from NeuralNetworksClass import *
 
 def load_krk_dataset(
     filename="krkopt.data",
@@ -93,3 +94,12 @@ if __name__ == "__main__":
     print("验证集:", len(xVal))
     print("测试集:", len(xTest))
     print("训练集标签示例:", yTrain[:5])
+
+    # 初始化神经网络
+    nn = NeuralNetworksClass(layer=[6, 20, 20, 20, 2], active_function='relu', learning_rate=0.01, batch_normalization=1,
+            optimization_method='Adam',
+            objective_function='Cross Entropy')
+    # 初始化训练参数
+    option = Option()
+    option.batch_size = 50
+    option.iteration = 1
