@@ -203,3 +203,41 @@ class NeuralNetworksClass:
 
             # 初始化权重梯度矩阵
             self.W_grad[k] = np.zeros((height, width), dtype=float)
+
+    def neuralNetworksTrain(self, option : Option, train_x : np.ndarray, train_y : np.ndarray):
+        """
+        使用指定的训练选项训练神经网络。
+
+        参数说明
+        ----------
+        option : Option
+            神经网络训练选项对象，包含批量大小和迭代次数等参数。
+
+        train_x : numpy.ndarray
+            训练数据特征矩阵，形状为 (样本数量, 特征数量)。
+            例:train_x.shape = (1000, 20) 表示有 1000 个样本，每个样本有 20 个特征。
+            
+        train_y : numpy.ndarray
+            训练数据标签矩阵，形状为 (样本数量, 标签数量)。
+            例:train_y.shape = (1000, 2) 表示有 1000 个样本，每个样本有 2 个标签（独热编码）。
+
+        返回值
+        -------
+        NeuralNetworksClass
+            经过训练后的神经网络对象。
+        """
+        iteration = option.iteration    # 迭代次数
+        batch_size = option.batch_size  # 每次迭代的批量大小
+        m = train_x.shape[0]            # 训练样本总数
+        num_batches = m / batch_size    # 每次迭代的批次数量
+        for k in range(iteration):
+            kk = np.random.permutation(m)   # 得到一个随机打乱样本顺序的索引数组
+            for j in range(int(num_batches)):
+                #(j+1)*batch_size也可以改成max((j+1)*batch_size, len(kk))
+                batch_x = train_x[kk[j * batch_size : (j + 1) * batch_size], :] # 取出当前批次的特征数据
+                batch_y = train_y[kk[j * batch_size : (j + 1) * batch_size], :] # 取出当前批次的标签数据
+                self = nn_forward(self,batch_x,batch_y) # 前向传播计算
+                self = nn_backpropagation(self,batch_y) # 反向传播计算梯度
+                self = nn_applygradient(self) # 应用梯度更新参数
+                
+        return self

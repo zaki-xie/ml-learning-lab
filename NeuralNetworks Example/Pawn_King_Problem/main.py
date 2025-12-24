@@ -40,7 +40,7 @@ def load_krk_dataset(
             parts = line.split(",")
 
             # 特征向量
-            vec = np.zeros(6, dtype=int)
+            vec = np.zeros(6, dtype=float)
             vec[0] = ord(parts[0]) - 96
             vec[1] = int(parts[1])
             vec[2] = ord(parts[2]) - 96
@@ -57,7 +57,6 @@ def load_krk_dataset(
                 yapp[index] = [0, 1]
 
             index += 1
-
     # -----------------------------
     # 3. 数据集划分
     # -----------------------------
@@ -93,7 +92,8 @@ if __name__ == "__main__":
     print("训练集:", len(xTrain))
     print("验证集:", len(xVal))
     print("测试集:", len(xTest))
-    print("训练集标签示例:", yTrain[:5])
+    print("训练集特征示例:", xTrain)
+    print("训练集标签示例:", yTrain)
 
     # 初始化神经网络
     nn = NeuralNetworksClass(layer=[6, 20, 20, 20, 2], active_function='relu', learning_rate=0.01, batch_normalization=1,
@@ -103,3 +103,26 @@ if __name__ == "__main__":
     option = Option()
     option.batch_size = 50
     option.iteration = 1
+    
+    # 训练过程
+    iteration = 0# 迭代计数器
+    maxAccuracy = 0# 当前最高准确率
+    totalAccuracy = []# 存储每次迭代的准确率
+    totalCost = []# 存储每次迭代的成本
+    maxIteration = 20# 最大迭代次数
+
+    # 迭代训练
+    while iteration < maxIteration:
+        iteration = iteration + 1# 增加迭代计数器
+        nn = nn.neuralNetworksTrain(option, xTrain, yTrain)# 训练神经网络
+        totalCost.append(sum(nn.cost.values()) / len(nn.cost.values()))# 记录当前成本
+        # plot(totalCost)
+        (wrongs, accuracy) = nn_test(nn, xValidation, yValidation)# 在验证集上测试
+        totalAccuracy.append(accuracy)# 记录当前准确率
+        if accuracy > maxAccuracy:# 更新最高准确率和存储的神经网络
+            maxAccuracy = accuracy
+            storedNN = nn
+
+        cost = totalCost[iteration - 1]# 当前成本
+        print(accuracy)# 输出当前准确率
+        print(totalCost[iteration - 1])# 输出当前成本
