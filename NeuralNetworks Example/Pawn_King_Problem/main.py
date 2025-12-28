@@ -1,4 +1,5 @@
 import os
+from matplotlib.pyplot import *
 import numpy as np
 from sklearn.discriminant_analysis import StandardScaler
 from sklearn.model_selection import train_test_split
@@ -117,7 +118,7 @@ if __name__ == "__main__":
         nn = nn.neuralNetworksTrain(option, xTrain, yTrain)# 训练神经网络
         totalCost.append(sum(nn.cost.values()) / len(nn.cost.values()))# 记录当前成本
         # plot(totalCost)
-        (wrongs, accuracy) = nn_test(nn, xValidation, yValidation)# 在验证集上测试
+        (wrongs, accuracy) = nn.neuralNetworksTest(xVal, yVal)# 在验证集上测试
         totalAccuracy.append(accuracy)# 记录当前准确率
         if accuracy > maxAccuracy:# 更新最高准确率和存储的神经网络
             maxAccuracy = accuracy
@@ -126,3 +127,21 @@ if __name__ == "__main__":
         cost = totalCost[iteration - 1]# 当前成本
         print(accuracy)# 输出当前准确率
         print(totalCost[iteration - 1])# 输出当前成本
+
+    # 绘制成本和准确率曲线
+    #subplot(2, 1, 1)表示在一个2行1列的图表中选择第1个子图
+    subplot(2, 1, 1)
+    plot(totalCost, color='red')# 绘制成本曲线，颜色为红色
+    title('Average Objective Function Value on the Training Set')
+
+    # 第二个子图：验证集准确率
+    #subplot(2, 1, 2)表示在一个2行1列的图表中选择第2个子图
+    subplot(2, 1, 2)
+    plot(totalAccuracy, color='red')# 绘制准确率曲线，颜色为红色
+    ylim([0.8, 1])# 设置y轴范围为0.8到1
+    title('Accuracy on the Validation Set')
+    tight_layout()#tight_layout(2)# 自动调整子图参数，使之填充整个图像区域
+    show()# 显示图表
+
+    wrongs, accuracy = storedNN.neuralNetworksTest(xTest, yTest)
+    print('acc:', accuracy)

@@ -1,3 +1,4 @@
+from typing import Dict
 import numpy as np
 
 class Option:
@@ -122,7 +123,8 @@ class NeuralNetworksClass:
         self.r = param['r']# 梯度平方累积的衰减率
         self.optimization_method = param['optimization_method']# 优化方法
         self.objective_function = param['objective_function']# 目标函数
-        self.a = dict()# 激活值字典
+        #self.a = dict()# 激活值字典
+        self.a: Dict[int, np.ndarray] = dict()# 激活值字典，添加类型注解
 
         # 若使用交叉熵损失函数，强制输出层激活函数为 softmax
         if self.objective_function == 'Cross Entropy':
@@ -237,10 +239,39 @@ class NeuralNetworksClass:
                 batch_x = train_x[kk[j * batch_size : (j + 1) * batch_size], :] # 取出当前批次的特征数据
                 batch_y = train_y[kk[j * batch_size : (j + 1) * batch_size], :] # 取出当前批次的标签数据
                 self = self.forward(batch_x, batch_y) # 前向传播计算
-                self = nn_backpropagation(batch_y) # 反向传播计算梯度
-                self = nn_applygradient() # 应用梯度更新参数
+                self = self.backPropagation(batch_y) # 反向传播计算梯度
+                self = self.applyGradient() # 应用梯度更新参数
                 
         return self
+    
+    def neuralNetworksTest(self,test_x : np.ndarray,test_y : np.ndarray):
+        """
+        使用测试数据评估神经网络的性能。
+        参数说明
+        ----------
+        test_x : numpy.ndarray
+            测试数据特征矩阵，形状为 (样本数量, 特征数量)。
+            例:test_x.shape = (200, 20) 表示有 200 个样本，每个样本有 20 个特征。
+        test_y : numpy.ndarray
+            测试数据标签矩阵，形状为 (样本数量, 标签数量)。
+            例:test_y.shape = (200, 2) 表示有 200 个样本，每个样本有 2 个标签（独热编码）。
+        
+        返回值
+        -------
+        wrongs : int
+            预测错误的样本数量。
+        success_ratio : float
+            预测成功率，范围为 [0, 1]。
+        """
+        nn = self.neuralNetworksPredict(test_x)
+        y_output = nn.a[nn.depth-1]
+        y_output = y_output.T
+        label = np.argmax(y_output, axis=1) #按行找出最大元素所在下标
+        expectation = np.argmax(test_y, axis=1)
+        wrongs = sum(label != expectation) #求预测与期望不相等的个数
+        success_ratio = 1-wrongs/test_y.shape[0]
+    
+        return wrongs, success_ratio
     
     def forward(self, batch_x : np.ndarray, batch_y : np.ndarray):
         """
@@ -360,6 +391,7 @@ class NeuralNetworksClass:
     
         return self
     
+    @staticmethod
     def sigmoid(x):
         """
         Sigmoid 激活函数。
@@ -380,7 +412,8 @@ class NeuralNetworksClass:
         """
         np.seterr(divide='ignore', invalid='ignore')# 忽略除零和无效值警告
         return 1 / (1 + np.exp(-x))
-
+    
+    @staticmethod
     def softmax(x):
         """
         Softmax 激活函数。
@@ -407,3 +440,432 @@ class NeuralNetworksClass:
             softmax_x[:,i] = exp_x[:,i] / (exp_x[0,i] + exp_x[1,i])
             
         return softmax_x 
+    
+    def backPropagation(self, batch_y : np.ndarray):
+        """
+        神经网络的反向传播计算。
+
+        参数说明
+        ----------
+        batch_y : numpy.ndarray
+            目标标签批次，形状为 (标签数量, 批次大小)。
+            例:batch_y.shape = (2, 32) 表示有 32 个样本，每个样本有 2 个标签（独热编码）。
+
+        返回值
+        -------
+        self : NeuralNetworks
+            返回当前神经网络实例，便于链式调用。
+        """
+        batch_y = batch_y.T# 转置标签数据，形状变为 (标签数量, 批次大小)
+        m = self.a[0].shape[1]# 批次大小
+        self.theta[1] = 0# 初始化第1层的误差项
+        f = self.output_function# 输出层激活函数
+        if f == 'sigmoid' :#
+            # Sigmoid 输出层误差项计算
+            # 误差项公式：
+            # θ = -(batch_y - a) * a * (1 - a)
+            # 其中 a 是输出层的激活值, batch_y 是目标标签, θ 是误差项
+            self.theta[self.depth-1] = -(batch_y - self.a[self.depth-1]) * self.a[self.depth-1] * (1 - self.a[self.depth-1])
+        if f == 'tanh' :
+            # Tanh 输出层误差项计算
+            # 误差项公式：
+            # θ = -(batch_y - a) * (1 - a²)
+            # 其中 a 是输出层的激活值, batch_y 是目标标签, θ 是误差项
+            self.theta[self.depth-1] = -(batch_y - self.a[self.depth-1]) * (1 - self.a[self.depth-1]**2)
+        if f == 'softmax' :
+            # Softmax 输出层误差项计算
+            # 误差项公式：
+            # θ = a - batch_y
+            # 其中 a 是输出层的激活值, batch_y 是目标标签, θ 是误差项
+            # y为输出层的线性组合输出
+            # 公式：y=W·a+b
+            # 其中 W 是输出层的权重矩阵, a 是上一层的激活值, b 是输出层的偏置项
+            y = np.dot(self.W[self.depth - 2], self.a[self.depth - 2]) + np.tile(self.b[self.depth - 2], (1, m))
+            self.theta[self.depth-1] = self.a[self.depth-1] - batch_y
+
+        if self.batch_normalization :
+            # 批量归一化梯度计算
+            # 对输出层的误差项进行批量归一化梯度计算
+            # x 为输出层的线性组合输入
+            # 公式：x = W·a + b
+            x = np.dot(self.W[self.depth - 2], self.a[self.depth -2]) + np.tile(self.b[self.depth - 2], (1, m))
+            # 标准化处理
+            # 对线性组合输入 x 进行标准化处理
+            # 公式：x_norm = (x - u) / (σ + ε)
+            # 其中 u 是均值，σ 是标准差，ε 是一个小常数防止除零
+            x = (x - np.tile(self.E[self.depth -2], (1, m))) / np.tile(self.S[self.depth -2] + 0.0001*np.ones(self.S[self.depth - 2].shape), (1, m))
+            temp = self.theta[self.depth-1] * x # 逐元素相乘
+            self.Gamma_grad[self.depth - 2] = sum(np.mean(temp, axis = 1))# 计算 Gamma 的梯度，np.mean(temp, axis = 1)计算每行的均值，sum()对均值求和
+            self.Beta_grad[self.depth - 2] = sum(np.mean(self.theta[self.depth-1], axis = 1))# 计算 Beta 的梯度
+            # 调整误差项
+            # 对输出层的误差项进行调整
+            # 公式：θ = (Gamma * θ) / (σ + ε)
+            # 其中 Gamma 是缩放参数，σ 是标准差，ε 是一个小常数防止除零
+            self.theta[self.depth - 1] = self.Gamma[self.depth - 2]*self.theta[self.depth-1] / np.tile((self.S[self.depth - 2] + 0.0001), (1, m))
+        # 计算输出层的权重梯度和偏置梯度
+        # 公式：
+        # ∇W = θ · a_prev^T / m + weight_decay * W
+        # ∇b = Σθ / m
+        # 其中 a_prev 是上一层的激活值, m 是批次大小, θ 是误差项, W 是权重矩阵, b 是偏置项, weight_decay 是 L2 正则化系数, ∇W 和 ∇b 分别是权重梯度和偏置梯度
+        self.W_grad[self.depth - 2] = np.dot(self.theta[self.depth-1], self.a[self.depth - 2].T) / m + self.weight_decay*self.W[self.depth - 2]
+        self.b_grad[self.depth - 2] = np.array([np.sum(self.theta[self.depth-1], axis=1) / m]).T 
+        #因为np.sum()返回维度为(n,)，会让之后的加法操作错误，所以要转换为(n,1)维度矩阵，下面的也是一样
+        
+        f = self.active_function
+        if f == 'sigmoid':
+            if self.encoder == 0 :
+                for ll in range(1, self.depth - 1) :
+                    k = self.depth - ll-1# 从倒数第二层开始反向计算误差项
+                    # Sigmoid 隐藏层误差项计算
+                    # 误差项公式：
+                    # θ = (W^T · θ_next) * a * (1 - a)
+                    # 其中 W 是当前层到下一层的权重矩阵, θ_next 是下一层的误差项, a 是当前层的激活值, θ 是当前层的误差项
+                    self.theta[k] = np.dot(self.W[k].T, self.theta[k + 1])*self.a[k]* (1 - self.a[k])
+                    if self.batch_normalization :# 批量归一化梯度计算
+                        # 对当前层的误差项进行批量归一化梯度计算
+                        # x 为当前层的线性组合输入
+                        # 公式：
+                        # x = W · a + b
+                        x = np.dot(self.W[k - 1], self.a[k - 1]) + np.tile(self.b[k - 1], (1, m))
+                        # 标准化处理
+                        # 对线性组合输入 x 进行标准化处理
+                        # 公式：
+                        # x = (x - u) / (σ + ε)
+                        # 其中 u 是均值，σ 是标准差，ε 是一个小常数防止除零
+                        x = (x - np.tile(self.E[k - 1], (1, m))) / np.tile(self.S[k - 1] + 0.0001*np.ones(self.S[k - 1].shape), (1, m))
+                        # 计算 Gamma 和 Beta 的梯度
+                        temp = self.theta[k]*x
+                        self.Gamma_grad[k - 1] = sum(np.mean(temp, axis = 1))
+                        self.Beta_grad[k - 1] = sum(np.mean(self.theta[k], axis = 1))
+                        # 调整误差项
+                        # 对当前层的误差项进行调整
+                        # 公式：
+                        # θ = (Gamma * θ) / (σ + ε)
+                        # 其中 Gamma 是缩放参数，σ 是标准差，ε 是一个小常数防止除零
+                        self.theta[k] = (self.Gamma[k - 1]* self.theta[k]) / np.tile((self.S[k - 1] + 0.0001), (1, m))
+                        pass
+                    # 计算当前层的权重梯度和偏置梯度
+                    # 公式：
+                    # ∇W = θ · a_prev^T / m + weight_decay * W
+                    # ∇b = Σθ / m
+                    # 其中 a_prev 是上一层的激活值, m 是批次大小, θ 是误差项, W 是权重矩阵, b 是偏置项, weight_decay 是 L2 正则化系数, ∇W 和 ∇b 分别是权重梯度和偏置梯度
+                    self.W_grad[k - 1] = np.dot(self.theta[k], self.a[k - 1].T) / m + self.weight_decay*self.W[k - 1]
+                    self.b_grad[k - 1] = np.array([np.sum(self.theta[k], axis = 1) / m]).T
+
+            else:
+                #encoder完全按照matlab的self，但貌似是有错误的，用encoder会报错，因为theta[2]（对应matlab的theta{3}）没有赋值
+                roj = np.array([np.sum(self.a[1], axis = 1) / m]).T 
+                temp = (-self.sparsity / roj + (1 - self.sparsity) / (1 - roj))
+                self.theta[1] = (np.dot(self.W[1].T, self.theta[2]) + self.beta*np.tile(temp, (1, m)))*M
+                self.W_grad[0] = np.dot(self.theta[1], self.a[0].T) / m + self.weight_decay*self.W[0]
+                self.b_grad[0] = np.array([np.sum(self.theta[1], axis = 1) / m]).T
+
+                # ##AI改的，不确定对不对
+                # # encoder 分支，对应 MATLAB 中的稀疏自编码器（sigmoid 激活）
+                # # roj = sum(nn.a{2},2)/m;
+                # roj = np.sum(self.a[1], axis=1, keepdims=True) / m  # 形状: (hidden_dim, 1)
+
+                # # temp = (-nn.sparsity./roj + (1-nn.sparsity)./(1-roj));
+                # temp = (-self.sparsity / roj) + (1 - self.sparsity) / (1 - roj)  # (hidden_dim, 1)
+
+                # # nn.theta{2} = ((nn.W{2}'*nn.theta{3}) + nn.beta*repmat(temp,1,m)) .* nn.a{2} .* (1 - nn.a{2});
+                # # 对应 Python:
+                # # self.W[1].T: (hidden_dim, output_dim)
+                # # self.theta[2]: (output_dim, m)
+                # # np.tile(temp, (1, m)): (hidden_dim, m)
+                # self.theta[1] = (
+                #     np.dot(self.W[1].T, self.theta[2]) +
+                #     self.beta * np.tile(temp, (1, m))
+                # ) * self.a[1] * (1 - self.a[1])
+
+                # # nn.W_grad{1} = nn.theta{2}*nn.a{1}'/m + nn.weight_decay*nn.W{1};
+                # self.W_grad[0] = np.dot(self.theta[1], self.a[0].T) / m + self.weight_decay * self.W[0]
+
+                # # nn.b_grad{1} = sum(nn.theta{2},2)/m;
+                # self.b_grad[0] = np.sum(self.theta[1], axis=1, keepdims=True) / m
+
+                
+
+        elif f == 'tanh':
+            for ll in range(1, self.depth-1) :
+                if self.encoder == 0 :
+                    k = self.depth - ll-1 # 从倒数第二层开始反向计算误差项
+                    # Tanh 隐藏层误差项计算
+                    # 误差项公式：
+                    # θ = (W^T · θ_next) * (1 - a²)
+                    # 其中 W 是当前层到下一层的权重矩阵, θ_next 是下一层的误差项, a 是当前层的激活值, θ 是当前层的误差项
+                    self.theta[k] = np.dot(self.W[k].T,self.theta[k + 1])*(1 - self.a[k]**2)
+                    if self.batch_normalization :
+                        # 批量归一化梯度计算
+                        # 对当前层的误差项进行批量归一化梯度计算
+                        # x 为当前层的线性组合输入
+                        # 公式：
+                        # x = W * a + b
+                        # 其中 W 是当前层到上一层的权重矩阵, a 是上一层的激活值, b 是当前层的偏置项
+                        x = np.dot(self.W[k - 1], self.a[k - 1]) + np.tile(self.b[k - 1], (1, m))
+                        x = (x - np.tile(self.E[k - 1], (1, m))) / np.tile(self.S[k - 1] + 0.0001*np.ones(self.S[k - 1].shape), (1, m))
+                        temp = self.theta[k]*x
+                        self.Gamma_grad[k - 1] = sum(np.mean(temp, axis = 1))
+                        self.Beta_grad[k - 1] = sum(np.mean(self.theta[k], axis = 1))
+                        self.theta[k] = (self.Gamma[k - 1]* self.theta[k]) / np.tile((self.S[k - 1] + 0.0001), (1, m))
+                        pass
+
+                    self.W_grad[k - 1] = np.dot(self.theta[k], self.a[k - 1].T) / m + self.weight_decay*self.W[k - 1]
+                    self.b_grad[k - 1] = np.array([np.sum(self.theta[k], axis = 1) / m]).T
+
+                else:
+                    # encoder 分支，对应 MATLAB 中的稀疏自编码器（tanh 激活）
+                    # 稀疏自编码器的误差项计算
+                    # 公式：
+                    # θ = (W^T · θ_next) + β * (−ρ/roj + (1 − ρ)/(1 − roj)) * M
+                    # 其中 W 是当前层到下一层的权重矩阵, θ_next 是下一层的误差项, β 是稀疏性参数, ρ 是目标稀疏性, roj 是实际稀疏性, M 是激活函数的导数
+                    roj = np.array([np.sum(self.a[1], axis = 1) / m]).T
+                    temp = (-self.sparsity / roj + (1 - self.sparsity) / (1 - roj))
+                    self.theta[1] = (np.dot(self.W[1].T, self.theta[2]) + self.beta*np.tile(temp, (1, m)))*M
+                    self.W_grad[0] = np.dot(self.theta[1], self.a[0].T) / m + self.weight_decay*self.W[0]
+                    self.b_grad[0] = np.array([np.sum(self.theta[1], axis = 1) / m]).T
+
+        elif f == 'relu':
+            if self.encoder == 0 :
+                for ll in range(1, self.depth - 1) :
+                    k = self.depth - ll-1
+                    self.theta[k] = np.dot(self.W[k].T,self.theta[k + 1])* (self.a[k] > 0)
+                    if self.batch_normalization :
+                        x = np.dot(self.W[k - 1], self.a[k - 1]) + np.tile(self.b[k - 1], (1, m))
+                        x = (x - np.tile(self.E[k - 1], (1, m))) / np.tile(self.S[k - 1] + 0.0001*np.ones(self.S[k - 1].shape), (1, m))
+                        temp = self.theta[k]*x
+                        self.Gamma_grad[k - 1] = sum(np.mean(temp, axis = 1))
+                        self.Beta_grad[k - 1] = sum(np.mean(self.theta[k], axis = 1))
+                        self.theta[k] = (self.Gamma[k - 1]* self.theta[k]) / np.tile((self.S[k - 1] + 0.0001), (1, m))
+                        pass
+
+                    self.W_grad[k - 1] = np.dot(self.theta[k], self.a[k - 1].T) / m + self.weight_decay*self.W[k - 1]
+                    self.b_grad[k - 1] = np.array([np.sum(self.theta[k], axis = 1) / m]).T
+
+            else:
+                roj = np.array([np.sum(self.a[1], axis = 1) / m]).T
+                temp = (-self.sparsity / roj + (1 - self.sparsity) / (1 - roj))
+                M = np.maximum(self.a[1], 0)
+                M = M / np.maximum(M, 0.001)
+
+                self.theta[1] = (np.dot(self.W[1].T, self.theta[2]) + self.beta*np.tile(temp, (1, m)))*M
+                self.W_grad[0] = np.dot(self.theta[1], self.a[0].T) / m + self.weight_decay*self.W[0]
+                self.b_grad[0] = np.array([np.sum(self.theta[1], axis = 1) / m]).T
+        return self
+    
+    def applyGradient(self):
+        """
+        应用梯度更新神经网络的权重和偏置。
+        参数说明
+        ----------
+        nn : NeuralNetworks
+            神经网络对象，包含权重、偏置及其梯度等信息。
+
+        返回值
+        -------
+        nn : NeuralNetworks
+            更新后的神经网络对象.
+        公式
+        -------
+        根据所选的优化方法，使用相应的公式更新权重和偏置。
+        1. 普通梯度下降:
+            W = W - learning_rate * ∇W
+            b = b - learning_rate * ∇b
+        2. AdaGrad:
+            rW = rW + (∇W)²
+            rb = rb + (∇b)²
+            W = W - learning_rate * ∇W / (sqrt(rW) + ε)
+            b = b - learning_rate * ∇b / (sqrt(rb) + ε)
+        3. Momentum:
+            vW = ρ * vW - learning_rate * ∇W
+            vb = ρ * vb - learning_rate * ∇b
+            W = W + vW
+            b = b + vb
+        4. RMSProp:
+            rW = ρ * rW + (1 - ρ) * (∇W)²
+            rb = ρ * rb + (1 - ρ) * (∇b)²
+            W = W - learning_rate * ∇W / (sqrt(rW) + ε)
+            b = b - learning_rate * ∇b / (sqrt(rb) + ε)
+        5. Adam:
+            sW = ρ1 * sW + (1 - ρ1) * ∇W
+            sb = ρ1 * sb + (1 - ρ1) * ∇b
+            rW = ρ2 * rW + (1 - ρ2) * (∇W)²
+            rb = ρ2 * rb + (1 - ρ2) * (∇b)²
+            W = W - learning_rate * sW / (sqrt(rW) + ε)
+            b = b - learning_rate * sb / (sqrt(rb) + ε)
+        其中 ε 是一个小常数，防止除零错误。
+
+        """
+
+        method = self.optimization_method
+        if method == 'AdaGrad' or method == 'RMSProp' or method == 'Adam':
+            grad_squared = 0
+            if self.batch_normalization == 0:
+                for k in range(self.depth-1):
+                    grad_squared = grad_squared + sum(sum(self.W_grad[k]**2)) + sum(self.b_grad[k]**2)
+            else:
+                for k in range(self.depth-1):
+                    grad_squared = grad_squared + sum(sum(self.W_grad[k]**2)) + sum(self.b_grad[k]**2) + self.Gamma[k]**2 + self.Beta[k]**2
+
+        for k in range(self.depth-1):
+            if self.batch_normalization == 0:
+                if method == 'normal':
+                    self.W[k] = self.W[k] - self.learning_rate*self.W_grad[k]
+                    self.b[k] = self.b[k] - self.learning_rate*self.b_grad[k]
+                    
+                elif method == 'AdaGrad':
+                    self.rW[k] = self.rW[k] + self.W_grad[k]**2
+                    self.rb[k] = self.rb[k] + self.b_grad[k]**2
+                    self.W[k] = self.W[k] - self.learning_rate*self.W_grad[k]/(np.sqrt(self.rW[k]) + 0.001)
+                    self.b[k] = self.b[k] - self.learning_rate*self.b_grad[k]/(np.sqrt(self.rb[k]) + 0.001)
+                    
+                elif method == 'Momentum':
+                    rho = 0.1 #rho = 0.1
+                    self.vW[k] = rho * self.vW[k] - self.learning_rate*self.W_grad[k]
+                    self.vb[k] = rho * self.vb[k] - self.learning_rate*self.b_grad[k]
+                    self.W[k] = self.W[k] + self.vW[k]
+                    self.b[k] = self.b[k] + self.vb[k]
+
+                elif method == 'RMSProp':
+                    rho = 0.9 #rho = 0.9
+                    self.rW[k] = rho * self.rW[k] + 0.1*self.W_grad[k]**2
+                    self.rb[k] = rho * self.rb[k] + 0.1*self.b_grad[k]**2
+
+                    self.W[k] = self.W[k] - self.learning_rate*self.W_grad[k]/(np.sqrt(self.rW[k]) + 0.001)
+                    self.b[k] = self.b[k] - self.learning_rate*self.b_grad[k]/(np.sqrt(self.rb[k]) + 0.001) #rho = 0.9
+
+                elif method == 'Adam':
+                    rho1 = 0.9
+                    rho2 = 0.999
+                    self.sW[k] = 0.9*self.sW[k] + 0.1*self.W_grad[k]
+                    self.sb[k] = 0.9*self.sb[k] + 0.1*self.b_grad[k]
+                    self.rW[k] = 0.999*self.rW[k] + 0.001*self.W_grad[k]**2
+                    self.rb[k] = 0.999*self.rb[k] + 0.001*self.b_grad[k]**2
+
+                    newS = self.sW[k] / (1 - rho1)
+                    newR = self.rW[k] / (1 - rho2)
+                    self.W[k] = self.W[k] - self.learning_rate*newS/np.sqrt(newR + 0.00001)
+                    newS = self.sb[k] / (1 - rho1)
+                    newR = self.rb[k] / (1 - rho2)
+                    self.b[k] = self.b[k] -self.learning_rate*newS/np.sqrt(newR + 0.00001)#rho1 = 0.9, rho2 = 0.999, delta = 0.00001
+
+            else:
+                if method == 'normal':
+                    self.W[k] = self.W[k] - self.learning_rate*self.W_grad[k]
+                    self.b[k] = self.b[k] - self.learning_rate*self.b_grad[k]
+                    self.Gamma[k] = self.Gamma[k] - self.learning_rate*self.Gamma_grad[k]
+                    self.Beta[k] = self.Beta[k] - self.learning_rate*self.Beta_grad[k]
+                    
+                elif method == 'AdaGrad':
+                    self.rW[k] = self.rW[k] + self.W_grad[k]**2
+                    self.rb[k] = self.rb[k] + self.b_grad[k]**2
+                    self.rGamma[k] = self.rGamma[k] + self.Gamma_grad[k]**2
+                    self.rBeta[k] = self.rBeta[k] + self.Beta_grad[k]**2
+                    self.W[k] = self.W[k] - self.learning_rate*self.W_grad[k]/(np.sqrt(self.rW[k]) + 0.001)
+                    self.b[k] = self.b[k] - self.learning_rate*self.b_grad[k]/(np.sqrt(self.rb[k]) + 0.001)
+                    self.Gamma[k] = self.Gamma[k] - self.learning_rate*self.Gamma_grad[k] / (np.sqrt(self.rGamma[k]) + 0.001)
+                    self.Beta[k] = self.Beta[k] - self.learning_rate*self.Beta_grad[k] / (np.sqrt(self.rBeta[k]) + 0.001)
+                    
+                elif method == 'RMSProp':
+                    self.rW[k] = 0.9*self.rW[k] + 0.1*self.W_grad[k]**2
+                    self.rb[k] = 0.9*self.rb[k] + 0.1*self.b_grad[k]**2
+                    self.rGamma[k] = 0.9*self.rGamma[k] + 0.1*self.Gamma_grad[k]**2
+                    self.rBeta[k] = 0.9*self.rBeta[k] + 0.1*self.Beta_grad[k]**2
+                    self.W[k] = self.W[k] - self.learning_rate*self.W_grad[k]/(np.sqrt(self.rW[k]) + 0.001)
+                    self.b[k] = self.b[k] - self.learning_rate*self.b_grad[k]/(np.sqrt(self.rb[k]) + 0.001)
+                    self.Gamma[k] = self.Gamma[k] - self.learning_rate*self.Gamma_grad[k] / (np.sqrt(self.rGamma[k]) + 0.001)
+                    self.Beta[k] = self.Beta[k] - self.learning_rate*self.Beta_grad[k] / (np.sqrt(self.rBeta[k]) + 0.001) #rho = 0.9
+
+                elif method == 'Momentum':
+                    rho = 0.1 #rho = 0.1
+                    self.vW[k] = rho * self.vW[k] - self.learning_rate*self.W_grad[k]
+                    self.vb[k] = rho * self.vb[k] - self.learning_rate*self.b_grad[k]
+                    self.vGamma[k] = rho * self.vGamma[k] - self.learning_rate*self.Gamma_grad[k]
+                    self.vBeta[k] = rho * self.vBeta[k] - self.learning_rate*self.Beta_grad[k]
+                    self.W[k] = self.W[k] + self.vW[k]
+                    self.b[k] = self.b[k] + self.vb[k]
+                    self.Gamma[k] = self.Gamma[k] + self.vGamma[k]
+                    self.Beta[k] = self.Beta[k] + self.vBeta[k]
+
+                elif method == 'Adam':
+                    self.sW[k] = 0.9*self.sW[k] + 0.1*self.W_grad[k]
+                    self.sb[k] = 0.9*self.sb[k] + 0.1*self.b_grad[k]
+                    self.sGamma[k] = 0.9*self.sGamma[k] + 0.1*self.Gamma_grad[k]
+                    self.sBeta[k] = 0.9*self.sBeta[k] + 0.1*self.Beta_grad[k]
+                    self.rW[k] = 0.999*self.rW[k] + 0.001*self.W_grad[k]**2
+                    self.rb[k] = 0.999*self.rb[k] + 0.001*self.b_grad[k]**2
+                    self.rBeta[k] = 0.999*self.rBeta[k] + 0.001*self.Beta_grad[k]**2
+                    self.rGamma[k] = 0.999*self.rGamma[k] + 0.001*self.Gamma_grad[k]**2
+                    self.W[k] = self.W[k] -10 * self.learning_rate*self.sW[k]/np.sqrt(1000 * self.rW[k]+0.00001)
+                    self.b[k] = self.b[k] -10 * self.learning_rate*self.sb[k]/np.sqrt(1000 * self.rb[k]+0.00001)
+                    self.Gamma[k] = self.Gamma[k] -10 * self.learning_rate*self.sGamma[k]/np.sqrt(1000 * self.rGamma[k]+0.00001)
+                    self.Beta[k] = self.Beta[k] -10 * self.learning_rate*self.sBeta[k]/np.sqrt(1000 * self.rBeta[k]+0.00001) #rho1 = 0.9, rho2 = 0.999, delta = 0.00001
+
+        return self
+    
+    def neuralNetworksPredict(self, batch_x : np.ndarray):
+        """
+        使用神经网络进行前向传播预测。
+        参数说明
+        ----------
+        batch_x : numpy.ndarray
+            输入数据批次，形状为 (样本数量, 特征数量)。
+        返回值
+        -------
+        self : NeuralNetworks
+            返回当前神经网络实例，便于链式调用。
+        公式
+        -------
+        前向传播计算公式：
+            a[0] = batch_x
+            for k in range(1, depth):
+                y = W[k-1] · a[k-1] + b[k-1]
+                if batch_normalization:
+                    y = (y - E[k-1]) / (S[k-1] + ε)
+                    y = Gamma[k-1] * y + Beta[k-1]
+                if k == depth - 1:
+                    a[k] = output_function(y)
+                else:
+                    a[k] = active_function(y)
+        其中 ε 是一个小常数，防止除零错误。
+        1. 输出层激活函数 output_function:
+            - Sigmoid: a = 1 / (1 + exp(-y))
+            - Tanh: a = tanh(y)
+            - ReLU: a = max(y, 0)
+            - Softmax: a[i] = exp(y[i]) / Σ exp(y[j])
+        2. 隐藏层激活函数 active_function:
+            - Sigmoid: a = 1 / (1 + exp(-y))
+            - Tanh: a = tanh(y)
+            - ReLU: a = max(y, 0)
+        公式详见各激活函数定义。
+        """
+        batch_x = batch_x.T 
+        m = batch_x.shape[1]
+        self.a[0] = batch_x 
+        for k in range(1, self.depth):
+            y = np.dot(self.W[k-1], self.a[k-1]) + np.tile(self.b[k-1], (1, m))
+            if self.batch_normalization:
+                y = (y - np.tile(self.E[k-1], (1, m))) / np.tile(self.S[k-1]+0.0001*np.ones(self.S[k-1].shape), (1, m)) 
+                y = self.Gamma[k-1]*y + self.Beta[k-1] 
+
+            if k == self.depth-1:
+                f = self.output_function
+                if f == 'sigmoid':
+                    self.a[k] = self.sigmoid(y) 
+                elif f == 'tanh':
+                    self.a[k] = np.tanh(y) 
+                elif f == 'relu':
+                    self.a[k] = np.maximum(y, 0) 
+                elif f == 'softmax':
+                    self.a[k] = self.softmax(y) 
+
+            else:
+                f = self.active_function
+                if f == 'sigmoid':
+                    self.a[k] = self.sigmoid(y) 
+                elif f == 'tanh':
+                    self.a[k] = np.tanh(y) 
+                elif f == 'relu':
+                    self.a[k] = np.maximum(y, 0) 
+                
+        return self
